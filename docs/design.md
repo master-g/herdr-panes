@@ -139,11 +139,17 @@ CI 只跑 `python3 -m unittest discover -s test`。
 
 ## 8. 下个会话的待办
 
-已完成（2026-09-18）：smart-split 在真实 session 里跑通（link → invoke，exit 0，方向和 cwd 都正确）；`src/herdr.py` socket 客户端可用，`layout.export` / `layout.set_split_ratio` 都实测过。
+已完成（2026-09-18）：
 
-1. 实现 `layouts.py` 布局树代数 + `shape_equal` / `ratio_plan`。**从零写，不抄 iurysza/herdr-pane-layouts**——那个仓库没有 LICENSE 文件，而且 `shape_equal` / `ratio_plan` 本来就是新东西，重写成本低于确认授权。需要的函数：`pane` / `split` 构造器、`balanced`、`tiled`、`pane_ids`、`first_pane`、`same`、`shape_equal`、`ratio_plan`、`presets`。
-2. 实现 equalize / cycle 的双路径分派（§4.3）。
-3. 实现 promote / master-width（§4.2）。
+- smart-split 在真实 session 里跑通（link → invoke，exit 0，方向和 cwd 都正确）。
+- `src/herdr.py` socket 客户端可用，`layout.export` / `layout.set_split_ratio` 都实测过。
+- `src/layouts.py` 布局树代数从零写完（没抄 iurysza/herdr-pane-layouts，那仓库无 LICENSE）：`pane` / `split` 构造器、`pane_ids`、`splits`、`shape_equal`、`ratio_plan`、`balanced`、`tiled`。17 个单测在 3.14.7 和 3.9.6 上都通过，并已在真实 tab 上闭环验证：`ratio_plan` 的计划逐条发给 `set_split_ratio` 后 ratio 精确命中、pane 顺序不变、重跑得空计划。
+  - 原清单里的 `first_pane` / `same` / `presets` 没写。`first_pane` 就是 `pane_ids(root)[0]`，`same` 被 `shape_equal` 覆盖，`presets` 要等 §4.5 的配置格式定下来才有内容。
+  - 也没写 `dwindle` 预设：smart-split 本来就按 dwindle 规则长出来，不需要再把它构造成目标树。
+
+1. 实现 equalize：`ratio_plan(current, balanced(current))` 走快路径。它永远 shape-equal，**不需要 staging**，可以先于重排落地。
+2. 实现 cycle 的双路径分派（§4.3）——这条才需要 `reshape_via_staging`。
+3. 实现 promote / master-width（§4.2）。master-width 只是 `set_split_ratio(path=[], ...)`，不依赖 layouts.py。
 4. 补 `preserve_split`（§4.1）。
 5. 验证 §6 的解绑问题。
 6. 决定许可证，写 README，打 GitHub topic `herdr-plugin` 上 marketplace。
