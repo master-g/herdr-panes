@@ -1,0 +1,13 @@
+id = "panes"
+name = "Panes"
+version = "0.0.1"
+min_herdr_version = "0.9.0"
+description = "Dwindle-style splitting, master layout, and lossless pane geometry for Herdr."
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "smart-split"
+title = "Panes: smart split"
+description = "Split the focused pane along its longer visual side."
+contexts = ["pane"]
+command = ["python3", "src/smart_split.py"]
