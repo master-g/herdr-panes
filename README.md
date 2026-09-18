@@ -56,9 +56,12 @@ description = "equalize"
 ## Test
 
 ```sh
-python3 src/smart_split.py --check
-python3 -m unittest discover -s test
+python3 src/smart_split.py --check          # 纯函数自检
+python3 -m unittest discover -s test        # 单测，CI 只跑这个
+python3 test/e2e_live.py                    # 实机检查，需要 herdr 在跑且插件已 link
 ```
+
+`e2e_live.py` 在自己新建的临时 tab 里跑，不碰你正在看的 tab、不移动焦点，结束后关掉临时 tab 并把焦点还回原处。它包含两次故意注入的失败，用来确认重排出错时会完整回滚。
 
 ## Requirements
 

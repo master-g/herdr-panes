@@ -145,9 +145,15 @@ else:
 
 ## 7. 测试
 
-沿用分层：纯函数（`direction_for`、`shape_equal`、`ratio_plan`、布局树代数）走 `unittest`，真实 session 行为走 `test/e2e_live.py`，必须在 herdr 里 link 后运行，验证重排后进程存活。e2e 进不了 CI。
+沿用分层：纯函数（`direction_for`、`shape_equal`、`ratio_plan`、`insert_plan`、布局树代数）走 `unittest`，36 个；真实 session 行为走 `test/e2e_live.py`，6 项检查，必须在 herdr 里 link 后运行。e2e 进不了 CI —— 文件名不匹配 `discover` 的 `test*.py`，所以 CI 命令不会误收它。
 
 CI 只跑 `python3 -m unittest discover -s test`。
+
+**e2e 的约束：**在自己新建的临时 tab 里跑，不碰用户正在看的 tab、不移动焦点，结束时关掉临时 tab、把焦点还回去，并核对 tab 列表与开始时一致。检查失败时清理照常执行。
+
+**覆盖的是 `reshape.py`**，因为它是这个仓库里唯一会搬动别人运行中进程的代码：往返重排后形状精确匹配且 `pane.process_info` 的 `shell_pid` 全部不变（进程存活的直接证据）、形状已相同时一次 `pane.move` 都不发、目标挪走 anchor 时拒绝且不碰 tab、插回中途失败时形状和比例完全还原、回滚也失败时保留 staging tab 且错误消息点名它、zoomed tab 重排后 zoom 状态还原。
+
+后两项靠猴补 `reshape._move` 在指定第几次调用上抛异常来触发。**这套检查本身验证过有效性**：把 `_rollback` 改成直接返回后重跑，第 4、5 项如期报 FAIL 并指出形状没还原，exit 1。
 
 ## 8. 下个会话的待办
 
@@ -162,9 +168,9 @@ CI 只跑 `python3 -m unittest discover -s test`。
   - 原清单里的 `first_pane` / `same` / `presets` 没写。`first_pane` 就是 `pane_ids(root)[0]`，`same` 被 `shape_equal` 覆盖，`presets` 要等 §4.5 的配置格式定下来才有内容。
   - 也没写 `dwindle` 预设：smart-split 本来就按 dwindle 规则长出来，不需要再把它构造成目标树。
 
-1. 验证 §6 的解绑问题。
-2. 决定许可证，打 GitHub topic `herdr-plugin` 上 marketplace。
-3. §4.5 的 `config.toml`：现在五个旋钮都走环境变量（README 有表），插件宿主没有给动作传用户环境变量的路子，要配置得自己读 `HERDR_PLUGIN_CONFIG_DIR`。
+1. 定下配置落点（§4.5）。现在四个旋钮走环境变量，但 manifest 的 action 没有 `env` 键、`plugin.action.invoke` 也不收环境变量，动作由服务端拉起继承服务端环境——**用户其实设不了**，和 §2「用户配置放 `HERDR_PLUGIN_CONFIG_DIR`」的约定冲突。另外 `config.toml` 与 §3 的「3.9 + 纯标准库」互斥：`tomllib` 是 3.11+ 才进标准库，`/usr/bin/python3` 3.9.6 上实测没有。候选：如实说明环境变量只对服务端生效／改读配置目录下的 JSON／自己写极简 TOML 子集解析器。
+2. 验证 §6 的解绑问题。
+3. 决定许可证，打 GitHub topic `herdr-plugin` 上 marketplace。**LICENSE 目前不存在**，而本文档以「iurysza 那个仓库没有 LICENSE」为由拒绝参考其代码，自己没有同样不能上架。
 
 ## 9. 参考
 
