@@ -123,7 +123,13 @@ else:
 
 ### 4.5 用户配置
 
-`HERDR_PLUGIN_CONFIG_DIR/config.toml`：cell 高宽比、master 宽度预设列表、cycle 经过哪几个布局。不要硬编码 0.6 这类数字。
+`HERDR_PLUGIN_CONFIG_DIR/config.json`，实现见 `src/config.py`。四个键：`cell_aspect`、`preserve_split`、`master_widths`、`cycle`。不要硬编码 0.6 这类数字。
+
+**改成 JSON 不是 TOML**（原计划是 TOML）：`tomllib` 是 3.11 才进标准库，`/usr/bin/python3` 3.9.6 上实测没有，而 §3 既要 3.9 又不许加依赖，自己写 TOML 子集解析器为了格式好看不划算。`json` 在 3.9 就有。
+
+**不用环境变量**：manifest 的 action 只接受 `command` / `contexts` / `description` / `platforms` / `title`，没有 `env` 键；`plugin.action.invoke` 也只收 `action_id` / `context` / `plugin_id`。动作由服务端拉起继承服务端环境，用户设不了。这一点和 §2 宿主约定里「用户配置放 `HERDR_PLUGIN_CONFIG_DIR`」是一致的。
+
+**坏配置直接报错**，不静默回落默认值：未知键会列出所有已知键，类型不符会指到具体项（列表还带下标），坏 JSON 会带上解析器的位置信息。消息里都有文件全路径，`herdr plugin log` 能看到。悄悄忽略用户写下的设置，比一个说清楚哪里错了的失败更糟。实测两种坏配置都会让动作 exit 1 并在日志里给出可操作的消息。
 
 ## 5. 明确不做的事，以及原因
 
@@ -145,7 +151,7 @@ else:
 
 ## 7. 测试
 
-沿用分层：纯函数（`direction_for`、`shape_equal`、`ratio_plan`、`insert_plan`、布局树代数）走 `unittest`，36 个；真实 session 行为走 `test/e2e_live.py`，6 项检查，必须在 herdr 里 link 后运行。e2e 进不了 CI —— 文件名不匹配 `discover` 的 `test*.py`，所以 CI 命令不会误收它。
+沿用分层：纯函数（`direction_for`、`shape_equal`、`ratio_plan`、`insert_plan`、布局树代数）走 `unittest`，51 个；真实 session 行为走 `test/e2e_live.py`，6 项检查，必须在 herdr 里 link 后运行。e2e 进不了 CI —— 文件名不匹配 `discover` 的 `test*.py`，所以 CI 命令不会误收它。
 
 CI 只跑 `python3 -m unittest discover -s test`。
 
@@ -161,6 +167,7 @@ CI 只跑 `python3 -m unittest discover -s test`。
 
 - smart-split 在真实 session 里跑通（link → invoke，exit 0，方向和 cwd 都正确）。
 - `src/herdr.py` socket 客户端可用，`layout.export` / `layout.set_split_ratio` 都实测过。
+- `src/config.py` + 单测 15 个（§4.5）：JSON 配置取代环境变量，实测写文件后不重启服务端即生效（`master_widths` 换成 `[0.25, 0.75]`，动作走的就是新预设）。
 - `src/reshape.py` + `src/cycle.py` + `panes.cycle` 动作（§4.3 §4.4）。真实会话实测：`(right A (down B C))` 连按三次 → columns → rows → columns，pane 顺序和进程都不变，没有 staging 残留，每次约 55ms。注入失败也实测过两种：插回阶段中途失败 → 形状和比例完全还原、staging 关掉；连回滚都失败 → staging 保留（错误消息点名 tab id），原 tab 不被进一步破坏。
 - `src/promote.py` / `src/master_width.py` + 对应动作（§4.2），以及 `smart_split.py` 的 `preserve_split`（§4.1）。`layouts.py` 补了 `parent_split` / `next_in_cycle`。
 - `src/equalize.py` + manifest 的 `panes.equalize` 动作：走 §4.3 快路径，真实会话里把 0.82/0.17 拉回 0.5/0.5，pane 顺序不变、进程不动，zoomed 下同样生效。动作耗时 21ms。
@@ -168,9 +175,8 @@ CI 只跑 `python3 -m unittest discover -s test`。
   - 原清单里的 `first_pane` / `same` / `presets` 没写。`first_pane` 就是 `pane_ids(root)[0]`，`same` 被 `shape_equal` 覆盖，`presets` 要等 §4.5 的配置格式定下来才有内容。
   - 也没写 `dwindle` 预设：smart-split 本来就按 dwindle 规则长出来，不需要再把它构造成目标树。
 
-1. 定下配置落点（§4.5）。现在四个旋钮走环境变量，但 manifest 的 action 没有 `env` 键、`plugin.action.invoke` 也不收环境变量，动作由服务端拉起继承服务端环境——**用户其实设不了**，和 §2「用户配置放 `HERDR_PLUGIN_CONFIG_DIR`」的约定冲突。另外 `config.toml` 与 §3 的「3.9 + 纯标准库」互斥：`tomllib` 是 3.11+ 才进标准库，`/usr/bin/python3` 3.9.6 上实测没有。候选：如实说明环境变量只对服务端生效／改读配置目录下的 JSON／自己写极简 TOML 子集解析器。
-2. 验证 §6 的解绑问题。
-3. 决定许可证，打 GitHub topic `herdr-plugin` 上 marketplace。**LICENSE 目前不存在**，而本文档以「iurysza 那个仓库没有 LICENSE」为由拒绝参考其代码，自己没有同样不能上架。
+1. 验证 §6 的解绑问题。
+2. 决定许可证，打 GitHub topic `herdr-plugin` 上 marketplace。**LICENSE 目前不存在**，而本文档以「iurysza 那个仓库没有 LICENSE」为由拒绝参考其代码，自己没有同样不能上架。
 
 ## 9. 参考
 

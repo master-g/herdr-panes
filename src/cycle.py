@@ -7,8 +7,7 @@ staging tab, which is the only way to change a tab's shape without killing what
 runs in it.
 """
 
-import os
-
+import config
 import herdr
 import layouts
 import reshape
@@ -17,9 +16,6 @@ PRESETS = {
     "columns": lambda ids: layouts.tiled(ids, "right"),
     "rows": lambda ids: layouts.tiled(ids, "down"),
 }
-
-ORDER = [name.strip() for name in
-         os.environ.get("HERDR_PANES_CYCLE", "columns,rows").split(",") if name.strip()]
 
 
 def next_target(current, targets):
@@ -37,12 +33,13 @@ def main():
     if len(ids) < 2:
         return 0
 
-    unknown = [name for name in ORDER if name not in PRESETS]
+    order = config.load()["cycle"]
+    unknown = [name for name in order if name not in PRESETS]
     if unknown:
-        raise ValueError("unknown preset(s) in HERDR_PANES_CYCLE: %s; known: %s"
-                         % (", ".join(unknown), ", ".join(sorted(PRESETS))))
+        raise ValueError("%s: unknown preset(s) in \"cycle\": %s; known: %s"
+                         % (config.path(), ", ".join(unknown), ", ".join(sorted(PRESETS))))
 
-    target = next_target(root, [PRESETS[name](ids) for name in ORDER])
+    target = next_target(root, [PRESETS[name](ids) for name in order])
     if layouts.shape_equal(root, target):
         for path, ratio in layouts.ratio_plan(root, target):
             herdr.set_split_ratio(path=path, ratio=ratio, tab_id=layout["tab_id"])

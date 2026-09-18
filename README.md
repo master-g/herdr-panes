@@ -44,14 +44,27 @@ description = "equalize"
 
 ## Configuration
 
-配置文件还没做，先用环境变量：
+可选，放在 `herdr plugin config-dir panes` 打印的目录里，文件名 `config.json`。不存在就用默认值；改完立即生效，不用重启 herdr。
 
-| 变量 | 默认 | 作用 |
+```json
+{
+  "cell_aspect": 2.0,
+  "preserve_split": false,
+  "master_widths": [0.333, 0.5, 0.667],
+  "cycle": ["columns", "rows"]
+}
+```
+
+| 键 | 默认 | 作用 |
 |---|---|---|
-| `HERDR_CELL_ASPECT` | `2.0` | 终端 cell 的高宽比，决定 smart-split 判断「视觉长边」的阈值。字体和行距会影响真实比例 |
-| `HERDR_PANES_PRESERVE_SPLIT` | 关 | 打开后新切分继承焦点 pane 所在 split 的方向，列保持是列，而不是按长边重算 |
-| `HERDR_PANES_MASTER_WIDTHS` | `0.333,0.5,0.667` | master-width 循环经过的比例，逗号分隔 |
-| `HERDR_PANES_CYCLE` | `columns,rows` | cycle 经过的布局预设，逗号分隔。可选 `columns`（一排列）和 `rows`（一叠行） |
+| `cell_aspect` | `2.0` | 终端 cell 的高宽比，决定 smart-split 判断「视觉长边」的阈值。字体和行距会影响真实比例 |
+| `preserve_split` | `false` | 打开后新切分继承焦点 pane 所在 split 的方向，列保持是列，而不是按长边重算 |
+| `master_widths` | `[0.333, 0.5, 0.667]` | master-width 循环经过的比例 |
+| `cycle` | `["columns", "rows"]` | cycle 经过的布局预设。可选 `columns`（一排列）和 `rows`（一叠行） |
+
+写错的键或坏掉的 JSON 会让动作直接失败并在 `herdr plugin log` 里说明哪个文件、哪一项不对，而不是悄悄忽略。
+
+用环境变量配置行不通：插件动作由 herdr 服务端拉起，继承的是服务端环境，不是你 shell 的。
 
 ## Test
 
