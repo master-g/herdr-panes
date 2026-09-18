@@ -87,3 +87,31 @@ def tiled(ids, direction="right"):
     for pane_id in reversed(ids[:-1]):
         node = split(direction, pane(pane_id), node)
     return node
+
+
+def parent_split(node, pane_id):
+    """The split a pane hangs off, or None when the pane is the whole tab."""
+    if is_pane(node):
+        return None
+    for key in ("first", "second"):
+        child = node[key]
+        if is_pane(child):
+            if child.get("pane_id") == pane_id:
+                return node
+        else:
+            found = parent_split(child, pane_id)
+            if found is not None:
+                return found
+    return None
+
+
+def next_in_cycle(current, values):
+    """The first value above `current`, wrapping around.
+
+    Cycling from a ratio the user dragged to by hand lands on the next preset
+    up rather than snapping backwards, and an exact preset advances by one.
+    """
+    for value in values:
+        if value > current + RATIO_EPSILON:
+            return value
+    return values[0]

@@ -18,3 +18,17 @@ title = "Panes: equalize"
 description = "Reset every split in the tab to an even ratio, without moving panes."
 contexts = ["pane"]
 command = ["python3", "src/equalize.py"]
+
+[[actions]]
+id = "promote"
+title = "Panes: promote to master"
+description = "Swap the focused pane into the master position."
+contexts = ["pane"]
+command = ["python3", "src/promote.py"]
+
+[[actions]]
+id = "master-width"
+title = "Panes: cycle master width"
+description = "Cycle the master pane through 1/3, 1/2 and 2/3."
+contexts = ["pane"]
+command = ["python3", "src/master_width.py"]

@@ -94,5 +94,38 @@ class TestConstructors(unittest.TestCase):
             layouts.tiled([])
 
 
+class TestParentSplit(unittest.TestCase):
+    def test_finds_the_split_a_nested_pane_hangs_off(self):
+        self.assertIs(layouts.parent_split(LIVE, "w1C:p8Z"), LIVE["first"])
+
+    def test_finds_the_root_for_a_top_level_pane(self):
+        self.assertIs(layouts.parent_split(LIVE, "w1C:p8Y"), LIVE)
+
+    def test_a_lone_pane_has_no_parent(self):
+        self.assertIsNone(layouts.parent_split(pane("a"), "a"))
+
+    def test_an_unknown_pane_has_no_parent(self):
+        self.assertIsNone(layouts.parent_split(LIVE, "w1C:nope"))
+
+
+class TestNextInCycle(unittest.TestCase):
+    PRESETS = [1 / 3.0, 0.5, 2 / 3.0]
+
+    def test_an_exact_preset_advances_by_one(self):
+        self.assertEqual(layouts.next_in_cycle(0.5, self.PRESETS), 2 / 3.0)
+
+    def test_the_last_preset_wraps(self):
+        self.assertEqual(layouts.next_in_cycle(2 / 3.0, self.PRESETS), 1 / 3.0)
+
+    def test_a_hand_dragged_ratio_lands_on_the_next_one_up(self):
+        self.assertEqual(layouts.next_in_cycle(0.43, self.PRESETS), 0.5)
+
+    def test_a_ratio_above_every_preset_wraps(self):
+        self.assertEqual(layouts.next_in_cycle(0.9, self.PRESETS), 1 / 3.0)
+
+    def test_float_noise_does_not_stall_the_cycle(self):
+        self.assertEqual(layouts.next_in_cycle(1 / 3.0 + 1e-9, self.PRESETS), 0.5)
+
+
 if __name__ == "__main__":
     unittest.main()

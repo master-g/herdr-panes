@@ -56,7 +56,7 @@ herdr 开新 pane 必须显式选方向（`prefix+v` / `prefix+minus`），布�
 
 - `python3 src/*.py` 冷启动约 45ms。
 - `herdr` CLI 单次往返 < 10ms。
-- `src/herdr.py` 的 socket 单次往返同量级。实测 equalize 动作全程 21ms（进程启动 + 一次 export + 两次 set_split_ratio）。
+- `src/herdr.py` 的 socket 单次往返同量级。实测 equalize 动作全程 21ms（进程启动 + 一次 export + 两次 set_split_ratio）。 smart-split 从三次 CLI 子进程改成四次 socket 调用后，84ms → 21ms：省的是子进程，不是网络。
 - 结论：延迟不是选传输的理由，有没有 CLI 入口才是（见 §3）。只有一次要连发十几次调用的重排，才值得考虑复用连接。
 
 ## 3. 技术选型
@@ -81,14 +81,15 @@ hyprland dwindle 规则：按焦点 pane 的**视觉**长边切。终端 cell �
 
 `CELL_ASPECT` 通过环境变量暴露，默认 2.0——字体和行距会影响真实比例，这个旋钮必须留着。
 
-实现见 `src/smart_split.py`，三次 CLI 调用（`pane layout` → `pane get` → `pane split`），纯函数 `direction_for()` 带 `--check` 自检。
+实现见 `src/smart_split.py`，四次 socket 调用（`layout.export` → `pane.layout` → `pane.get` → `pane.split`），纯函数 `direction_for()` 带 `--check` 自检。
 
-待做：`preserve_split`（新切分继承父级 split 方向，从 `layout.export` 找焦点 pane 的父节点读 `direction`）。
+`preserve_split` 已实现：`HERDR_PANES_PRESERVE_SPLIT=1` 打开后，用 `layouts.parent_split()` 从导出树里找焦点 pane 的父 split，继承它的 `direction`；焦点 pane 独占整个 tab（没有父 split）时回落到长边判据。默认关，和 hyprland 一致。实测同一个 41×45 的 pane：默认切 `down`，打开后切 `right`。
 
 ### 4.2 master 布局
 
-- `promote`：把焦点 pane 和主位置 pane 做一次 `pane.swap`（显式 source/target 形式）。同 tab、保留进程、保留形状，零风险。这是 hyprland master 布局的核心交互。
-- `master-width`：循环 1/3 → 1/2 → 2/3，走 `layout.set_split_ratio` 改根节点比例。同样无损。
+- `promote`（`src/promote.py`）：把焦点 pane 和主位置 pane 做一次 `pane.swap`（显式 source/target 形式）。同 tab、保留进程、保留形状，零风险。主位置就是 `pane_ids(root)[0]`。焦点 pane 已经在主位置时，和 `pane_ids(root)[1]` 交换，也就是降回栈里——hyprland 的 master 布局就是这个行为。实测三 pane 连按两次：`[A,B,C]` 焦点 C → `[C,B,A]` → `[B,C,A]`，**焦点始终跟着进程走而不是跟着位置走**。
+- `master-width`（`src/master_width.py`）：`layouts.next_in_cycle()` 挑下一个比例，`layout.set_split_ratio(path=[])` 改根节点。无损，pane 顺序不变。预设走 `HERDR_PANES_MASTER_WIDTHS`，默认 `0.333,0.5,0.667`。用户手拖到 0.43 之后按一次会落到 0.5，而不是先跳回 0.333。
+  - 根节点是 `down` split 时，改的其实是 master 的高度。同一个概念转 90°，没有为此分支。
 
 ### 4.3 equalize / cycle 的无损快路径
 
@@ -146,16 +147,15 @@ CI 只跑 `python3 -m unittest discover -s test`。
 
 - smart-split 在真实 session 里跑通（link → invoke，exit 0，方向和 cwd 都正确）。
 - `src/herdr.py` socket 客户端可用，`layout.export` / `layout.set_split_ratio` 都实测过。
+- `src/promote.py` / `src/master_width.py` + 对应动作（§4.2），以及 `smart_split.py` 的 `preserve_split`（§4.1）。`layouts.py` 补了 `parent_split` / `next_in_cycle`。
 - `src/equalize.py` + manifest 的 `panes.equalize` 动作：走 §4.3 快路径，真实会话里把 0.82/0.17 拉回 0.5/0.5，pane 顺序不变、进程不动，zoomed 下同样生效。动作耗时 21ms。
-- `src/layouts.py` 布局树代数从零写完（没抄 iurysza/herdr-pane-layouts，那仓库无 LICENSE）：`pane` / `split` 构造器、`pane_ids`、`splits`、`shape_equal`、`ratio_plan`、`balanced`、`tiled`。17 个单测在 3.14.7 和 3.9.6 上都通过，并已在真实 tab 上闭环验证：`ratio_plan` 的计划逐条发给 `set_split_ratio` 后 ratio 精确命中、pane 顺序不变、重跑得空计划。
+- `src/layouts.py` 布局树代数从零写完（没抄 iurysza/herdr-pane-layouts，那仓库无 LICENSE）：`pane` / `split` 构造器、`pane_ids`、`splits`、`shape_equal`、`ratio_plan`、`balanced`、`tiled`。单测（现 26 个）在 3.14.7 和 3.9.6 上都通过，并已在真实 tab 上闭环验证：`ratio_plan` 的计划逐条发给 `set_split_ratio` 后 ratio 精确命中、pane 顺序不变、重跑得空计划。
   - 原清单里的 `first_pane` / `same` / `presets` 没写。`first_pane` 就是 `pane_ids(root)[0]`，`same` 被 `shape_equal` 覆盖，`presets` 要等 §4.5 的配置格式定下来才有内容。
   - 也没写 `dwindle` 预设：smart-split 本来就按 dwindle 规则长出来，不需要再把它构造成目标树。
 
-1. 实现 cycle 的双路径分派（§4.3）——这条才需要 `reshape_via_staging`。
-3. 实现 promote / master-width（§4.2）。master-width 只是 `set_split_ratio(path=[], ...)`，不依赖 layouts.py。
-4. 补 `preserve_split`（§4.1）。
-5. 验证 §6 的解绑问题。
-6. 决定许可证，写 README，打 GitHub topic `herdr-plugin` 上 marketplace。
+1. 实现 cycle 的双路径分派（§4.3）——**剩下唯一需要 `reshape_via_staging` 的动作**，也是唯一会搬进程的路径。zoom 处理（§4.4）只在这条路上需要。
+2. 验证 §6 的解绑问题。
+3. 决定许可证，打 GitHub topic `herdr-plugin` 上 marketplace。
 
 ## 9. 参考
 
