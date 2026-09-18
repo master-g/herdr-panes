@@ -115,3 +115,44 @@ def next_in_cycle(current, values):
         if value > current + RATIO_EPSILON:
             return value
     return values[0]
+
+
+def first_pane(node):
+    """The pane in the master position: leftmost, then topmost."""
+    return pane_ids(node)[0]
+
+
+def insert_plan(node):
+    """[(pane_id, target_pane_id, direction, ratio)] rebuilding `node` by insertion.
+
+    pane.move puts the moved pane on the *second* side of a new split at the
+    target pane, so a tree has to be built outermost split first: the pane that
+    opens a split is the first pane of that split's second branch, and it splits
+    off the pane that already holds the region. Applying the plan in order to a
+    tab holding only first_pane(node) reproduces `node` exactly.
+    """
+    anchor = first_pane(node)
+    plan = []
+
+    def walk(current, held_by):
+        if is_pane(current):
+            return
+        opener = first_pane(current["second"])
+        plan.append((opener, held_by, current["direction"], current["ratio"]))
+        walk(current["first"], held_by)
+        walk(current["second"], opener)
+
+    walk(node, anchor)
+    return plan
+
+
+def apply_insert(node, pane_id, target_pane_id, direction, ratio):
+    """Where a pane lands when moved next to `target_pane_id`. Mirrors pane.move."""
+    if is_pane(node):
+        if node.get("pane_id") != target_pane_id:
+            return node
+        return split(direction, node, pane(pane_id), ratio)
+    return split(node["direction"],
+                 apply_insert(node["first"], pane_id, target_pane_id, direction, ratio),
+                 apply_insert(node["second"], pane_id, target_pane_id, direction, ratio),
+                 node["ratio"])

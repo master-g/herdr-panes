@@ -32,3 +32,10 @@ title = "Panes: cycle master width"
 description = "Cycle the master pane through 1/3, 1/2 and 2/3."
 contexts = ["pane"]
 command = ["python3", "src/master_width.py"]
+
+[[actions]]
+id = "cycle"
+title = "Panes: cycle layout"
+description = "Cycle the tab through layout presets, moving panes only when the shape has to change."
+contexts = ["pane"]
+command = ["python3", "src/cycle.py"]

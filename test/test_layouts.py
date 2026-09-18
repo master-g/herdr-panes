@@ -6,6 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "src"))
 
+import cycle
 import layouts
 from layouts import pane, split
 
@@ -125,6 +126,78 @@ class TestNextInCycle(unittest.TestCase):
 
     def test_float_noise_does_not_stall_the_cycle(self):
         self.assertEqual(layouts.next_in_cycle(1 / 3.0 + 1e-9, self.PRESETS), 0.5)
+
+
+class TestInsertPlan(unittest.TestCase):
+    """The plan has to rebuild the tree exactly, or a reshape scrambles the tab."""
+
+    TREES = {
+        "lone pane": pane("a"),
+        "one split": split("right", pane("a"), pane("b"), ratio=0.4),
+        "nested right": split("right", pane("a"), split("down", pane("b"), pane("c"))),
+        # the shape naive left-to-right insertion cannot reach: the outer split's
+        # first branch is itself a split
+        "nested left": split("right", split("down", pane("a"), pane("b")), pane("c")),
+        "deep both sides": split("down",
+                                 split("right", pane("a"), pane("b"), ratio=0.2),
+                                 split("right", pane("c"), split("down", pane("d"), pane("e"))),
+                                 ratio=0.6),
+        "live tab": LIVE,
+    }
+
+    def rebuild(self, target):
+        tree = pane(layouts.first_pane(target))
+        for pane_id, target_id, direction, ratio in layouts.insert_plan(target):
+            tree = layouts.apply_insert(tree, pane_id, target_id, direction, ratio)
+        return tree
+
+    def test_every_tree_is_rebuilt_exactly(self):
+        for name, target in self.TREES.items():
+            self.assertEqual(self.rebuild(target), target, name)
+
+    def test_a_lone_pane_needs_no_moves(self):
+        self.assertEqual(layouts.insert_plan(pane("a")), [])
+
+    def test_one_move_per_pane_beyond_the_anchor(self):
+        for name, target in self.TREES.items():
+            self.assertEqual(len(layouts.insert_plan(target)),
+                             len(layouts.pane_ids(target)) - 1, name)
+
+    def test_the_anchor_is_never_moved(self):
+        for name, target in self.TREES.items():
+            moved = [pane_id for pane_id, _, _, _ in layouts.insert_plan(target)]
+            self.assertNotIn(layouts.first_pane(target), moved, name)
+
+    def test_a_pane_only_splits_off_one_already_placed(self):
+        for name, target in self.TREES.items():
+            placed = set([layouts.first_pane(target)])
+            for pane_id, target_id, _, _ in layouts.insert_plan(target):
+                self.assertIn(target_id, placed, "%s: %s" % (name, target_id))
+                placed.add(pane_id)
+
+
+class TestNextTarget(unittest.TestCase):
+    IDS = ["a", "b", "c"]
+    COLUMNS = layouts.tiled(IDS, "right")
+    ROWS = layouts.tiled(IDS, "down")
+
+    def test_a_tab_already_in_a_preset_advances(self):
+        self.assertEqual(cycle.next_target(self.COLUMNS, [self.COLUMNS, self.ROWS]), self.ROWS)
+
+    def test_the_last_preset_wraps(self):
+        self.assertEqual(cycle.next_target(self.ROWS, [self.COLUMNS, self.ROWS]), self.COLUMNS)
+
+    def test_an_unrecognised_shape_starts_over(self):
+        odd = split("right", split("down", pane("a"), pane("b")), pane("c"))
+        self.assertEqual(cycle.next_target(odd, [self.COLUMNS, self.ROWS]), self.COLUMNS)
+
+    def test_ratios_do_not_stop_a_preset_from_matching(self):
+        stretched = layouts.balanced(self.COLUMNS, ratio=0.8)
+        self.assertEqual(cycle.next_target(stretched, [self.COLUMNS, self.ROWS]), self.ROWS)
+
+    def test_a_single_preset_cycles_to_itself(self):
+        # the shape already matches, so the caller takes the ratio-only fast path
+        self.assertEqual(cycle.next_target(self.COLUMNS, [self.COLUMNS]), self.COLUMNS)
 
 
 if __name__ == "__main__":

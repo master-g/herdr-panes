@@ -28,10 +28,12 @@ herdr 开新 pane 必须显式选方向（`prefix+v` / `prefix+minus`），布�
 | 应用布局树 | `layout.apply` | **会杀进程。**先建新 tab 再关旧 tab，不保留 PTY、scrollback、运行中的进程。只能用于"从模板开新 tab" |
 | 改分割比例 | `layout.set_split_ratio` | 参数 `{tab_id, path: [bool], ratio}`。**无损**，纯元数据，不动任何进程 |
 | 交换 pane | `pane.swap` | **无损**。同 tab only，保留进程、pane id、split 形状和比例。支持方向式和显式 `source_pane_id`/`target_pane_id` |
-| 移动 pane | `pane.move` | 跨 tab / 新 tab / 新 workspace。**同 tab 移动被拒**（`changed: false`, `reason: "same_tab"`）。zoomed 的源或目标返回 `reason: "zoomed_tab"` |
+| 移动 pane | `pane.move` | 跨 tab / 新 tab / 新 workspace，目的地可带 `target_pane_id` + `split` + `ratio`，移动的 pane 落在新 split 的第二侧。**拒绝写在返回体里而不是抛错**：`changed: false` 加 `reason`，同 tab 是 `same_tab`，两端任一 zoomed 是 `zoomed_tab`。调用方必须查 `changed` |
 | 读几何 | `pane.layout` | 每个 pane 的 cell 矩形 + split 矩形/比例。实测本机满屏 tab = 280×69 cells |
 | 读 cwd | `pane.get` | 返回 `cwd` 和 `foreground_cwd`（后者跟着 shell 的 `cd` 走，更准） |
 | 开 pane | `pane.split` | `--direction right\|down`，可带 `--ratio` `--cwd` `--env` |
+| 新建 tab | `tab.create` | **自带一个 root pane**，所以 staging tab 永远不是空的。判断「可以关了」要认这个 pane |
+| 关 tab | `tab.close` | tab 被搬空后 herdr 会自动关掉它，此时再 `tab.close` 报 `tab_not_found` |
 | 缩放 | `pane.zoom` | 有显式 `mode: "on" / "off"`，不必只靠 toggle |
 
 **由此推出的核心结论：**
@@ -107,9 +109,15 @@ else:
 
 `shape_equal` 和 `ratio_plan` 是新的非平凡纯函数，必须有单测。
 
+**重排的实现（`src/reshape.py`）。**`pane.move` 可以带 `target_pane_id` + `split` + `ratio`，所以插回位置是可控的；被移动的 pane 永远落在新 split 的**第二**侧。由此推出插入顺序必须自外向内：开启一个 split 的，是这个 split 第二分支里的第一个 pane，它从当前占着这块区域的 pane 上切出去。`layouts.insert_plan()` 按这个规则出计划，`apply_insert()` 是它的镜像，单测拿两者对拍，确认任意目标树都能精确复原——包括朴素的从左往右插入到不了的「第一分支本身是 split」那种形状。
+
+**anchor 不动。**主位置那个 pane 全程留在原 tab（tab 不能空），其余 pane 先全部停到 staging tab，再按计划插回。因此目标布局必须保持同一个 pane 在主位置，`reshape()` 会校验这一点。
+
+**失败就全回滚。**任何一步失败，先把原 tab 里除 anchor 外的 pane 重新停到 staging，再按**原布局**的插入计划重建，然后才把异常抛出去。回滚本身也失败时**不关 staging tab**——里面是用户还在跑的进程，关掉就没了——错误消息里点名 tab id 供人工恢复。两种情况都实测过（见 §8）。
+
 ### 4.4 zoom 处理
 
-**只有重排路径需要这个。**实测（2026-09-18）：zoomed tab 上 `layout.set_split_ratio` 正常生效，zoom 状态也不变——比例是纯元数据，跟哪个 pane 正在放大无关。所以 §4.3 的快路径不用管 zoom，equalize 在 zoomed tab 上直接可用。
+**只有重排路径需要这个，现在由 `reshape.reshape()` 处理：**移动前 `mode="off"`，成功或回滚之后 `mode="on"`。实测（2026-09-18）：zoomed tab 上 `layout.set_split_ratio` 正常生效，zoom 状态也不变——比例是纯元数据，跟哪个 pane 正在放大无关。所以 §4.3 的快路径不用管 zoom，equalize 在 zoomed tab 上直接可用。
 
 真要搬 pane 时（`pane.move` 对 zoomed 的源或目标回 `zoomed_tab`），才用 `pane.zoom mode=off` → 重排 → `mode=on`，两次多余调用换掉一个用户要手动处理的错误。现有插件是遇到 zoomed 就直接报错让用户手动 unzoom。
 
@@ -147,15 +155,16 @@ CI 只跑 `python3 -m unittest discover -s test`。
 
 - smart-split 在真实 session 里跑通（link → invoke，exit 0，方向和 cwd 都正确）。
 - `src/herdr.py` socket 客户端可用，`layout.export` / `layout.set_split_ratio` 都实测过。
+- `src/reshape.py` + `src/cycle.py` + `panes.cycle` 动作（§4.3 §4.4）。真实会话实测：`(right A (down B C))` 连按三次 → columns → rows → columns，pane 顺序和进程都不变，没有 staging 残留，每次约 55ms。注入失败也实测过两种：插回阶段中途失败 → 形状和比例完全还原、staging 关掉；连回滚都失败 → staging 保留（错误消息点名 tab id），原 tab 不被进一步破坏。
 - `src/promote.py` / `src/master_width.py` + 对应动作（§4.2），以及 `smart_split.py` 的 `preserve_split`（§4.1）。`layouts.py` 补了 `parent_split` / `next_in_cycle`。
 - `src/equalize.py` + manifest 的 `panes.equalize` 动作：走 §4.3 快路径，真实会话里把 0.82/0.17 拉回 0.5/0.5，pane 顺序不变、进程不动，zoomed 下同样生效。动作耗时 21ms。
 - `src/layouts.py` 布局树代数从零写完（没抄 iurysza/herdr-pane-layouts，那仓库无 LICENSE）：`pane` / `split` 构造器、`pane_ids`、`splits`、`shape_equal`、`ratio_plan`、`balanced`、`tiled`。单测（现 26 个）在 3.14.7 和 3.9.6 上都通过，并已在真实 tab 上闭环验证：`ratio_plan` 的计划逐条发给 `set_split_ratio` 后 ratio 精确命中、pane 顺序不变、重跑得空计划。
   - 原清单里的 `first_pane` / `same` / `presets` 没写。`first_pane` 就是 `pane_ids(root)[0]`，`same` 被 `shape_equal` 覆盖，`presets` 要等 §4.5 的配置格式定下来才有内容。
   - 也没写 `dwindle` 预设：smart-split 本来就按 dwindle 规则长出来，不需要再把它构造成目标树。
 
-1. 实现 cycle 的双路径分派（§4.3）——**剩下唯一需要 `reshape_via_staging` 的动作**，也是唯一会搬进程的路径。zoom 处理（§4.4）只在这条路上需要。
-2. 验证 §6 的解绑问题。
-3. 决定许可证，打 GitHub topic `herdr-plugin` 上 marketplace。
+1. 验证 §6 的解绑问题。
+2. 决定许可证，打 GitHub topic `herdr-plugin` 上 marketplace。
+3. §4.5 的 `config.toml`：现在五个旋钮都走环境变量（README 有表），插件宿主没有给动作传用户环境变量的路子，要配置得自己读 `HERDR_PLUGIN_CONFIG_DIR`。
 
 ## 9. 参考
 
