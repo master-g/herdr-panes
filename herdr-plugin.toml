@@ -11,3 +11,10 @@ title = "Panes: smart split"
 description = "Split the focused pane along its longer visual side."
 contexts = ["pane"]
 command = ["python3", "src/smart_split.py"]
+
+[[actions]]
+id = "equalize"
+title = "Panes: equalize"
+description = "Reset every split in the tab to an even ratio, without moving panes."
+contexts = ["pane"]
+command = ["python3", "src/equalize.py"]

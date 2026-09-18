@@ -11,7 +11,7 @@ Dwindle-style splitting, master layout, and lossless pane geometry for [Herdr](h
 | `panes.smart-split` | Split the focused pane along its longer visual side | 骨架可用 |
 | `panes.promote` | Swap the focused pane into the master position | 未实现 |
 | `panes.master-width` | Cycle the master pane through 1/3, 1/2, 2/3 | 未实现 |
-| `panes.equalize` | Equalize split ratios without moving processes when possible | 未实现 |
+| `panes.equalize` | Equalize split ratios without moving processes when possible | 可用 |
 | `panes.cycle` | Cycle the tab through layout presets | 未实现 |
 
 ## Install
@@ -34,6 +34,12 @@ key = "prefix+v"
 type = "plugin_action"
 command = "panes.smart-split"
 description = "smart split"
+
+[[keys.command]]
+key = "prefix+="
+type = "plugin_action"
+command = "panes.equalize"
+description = "equalize"
 ```
 
 ## Test

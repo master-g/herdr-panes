@@ -56,7 +56,8 @@ herdr 开新 pane 必须显式选方向（`prefix+v` / `prefix+minus`），布�
 
 - `python3 src/*.py` 冷启动约 45ms。
 - `herdr` CLI 单次往返 < 10ms。
-- 结论：开 pane、equalize 这类低频动作走 CLI 完全够用；只有需要连发十几次调用的重排才值得直连 socket。
+- `src/herdr.py` 的 socket 单次往返同量级。实测 equalize 动作全程 21ms（进程启动 + 一次 export + 两次 set_split_ratio）。
+- 结论：延迟不是选传输的理由，有没有 CLI 入口才是（见 §3）。只有一次要连发十几次调用的重排，才值得考虑复用连接。
 
 ## 3. 技术选型
 
@@ -107,7 +108,9 @@ else:
 
 ### 4.4 zoom 处理
 
-现有插件遇到 zoomed tab 直接报错让用户手动 unzoom。我们用 `pane.zoom mode=off` → 重排 → `mode=on`，两次多余调用换掉一个用户要手动处理的错误。
+**只有重排路径需要这个。**实测（2026-09-18）：zoomed tab 上 `layout.set_split_ratio` 正常生效，zoom 状态也不变——比例是纯元数据，跟哪个 pane 正在放大无关。所以 §4.3 的快路径不用管 zoom，equalize 在 zoomed tab 上直接可用。
+
+真要搬 pane 时（`pane.move` 对 zoomed 的源或目标回 `zoomed_tab`），才用 `pane.zoom mode=off` → 重排 → `mode=on`，两次多余调用换掉一个用户要手动处理的错误。现有插件是遇到 zoomed 就直接报错让用户手动 unzoom。
 
 ### 4.5 用户配置
 
@@ -143,12 +146,12 @@ CI 只跑 `python3 -m unittest discover -s test`。
 
 - smart-split 在真实 session 里跑通（link → invoke，exit 0，方向和 cwd 都正确）。
 - `src/herdr.py` socket 客户端可用，`layout.export` / `layout.set_split_ratio` 都实测过。
+- `src/equalize.py` + manifest 的 `panes.equalize` 动作：走 §4.3 快路径，真实会话里把 0.82/0.17 拉回 0.5/0.5，pane 顺序不变、进程不动，zoomed 下同样生效。动作耗时 21ms。
 - `src/layouts.py` 布局树代数从零写完（没抄 iurysza/herdr-pane-layouts，那仓库无 LICENSE）：`pane` / `split` 构造器、`pane_ids`、`splits`、`shape_equal`、`ratio_plan`、`balanced`、`tiled`。17 个单测在 3.14.7 和 3.9.6 上都通过，并已在真实 tab 上闭环验证：`ratio_plan` 的计划逐条发给 `set_split_ratio` 后 ratio 精确命中、pane 顺序不变、重跑得空计划。
   - 原清单里的 `first_pane` / `same` / `presets` 没写。`first_pane` 就是 `pane_ids(root)[0]`，`same` 被 `shape_equal` 覆盖，`presets` 要等 §4.5 的配置格式定下来才有内容。
   - 也没写 `dwindle` 预设：smart-split 本来就按 dwindle 规则长出来，不需要再把它构造成目标树。
 
-1. 实现 equalize：`ratio_plan(current, balanced(current))` 走快路径。它永远 shape-equal，**不需要 staging**，可以先于重排落地。
-2. 实现 cycle 的双路径分派（§4.3）——这条才需要 `reshape_via_staging`。
+1. 实现 cycle 的双路径分派（§4.3）——这条才需要 `reshape_via_staging`。
 3. 实现 promote / master-width（§4.2）。master-width 只是 `set_split_ratio(path=[], ...)`，不依赖 layouts.py。
 4. 补 `preserve_split`（§4.1）。
 5. 验证 §6 的解绑问题。
