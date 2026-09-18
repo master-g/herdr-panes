@@ -36,6 +36,10 @@ herdr 开新 pane 必须显式选方向（`prefix+v` / `prefix+minus`），布�
 
 **由此推出的核心结论：**
 
+**传输层事实（实测）：** 请求信封是 NDJSON —— 一行 `{"id", "method", "params"}`，回一行 `{"id", "result"}` 或 `{"id", "error": {"code", "message"}}`。`layout.export` 的树：`split` 节点带 `direction` / `ratio` / `first` / `second`，`pane` 节点带 `pane_id` / `cwd`。`layout.set_split_ratio` 的 `path` 是 `[bool]`，`[]` 指根 split。已在本机验证 `path=[] ratio=0.75` 精确生效、pane id 不变、改回 0.5 完全还原。
+
+**插件动作里的 `--current` 跟随 herdr 会话焦点，不是调用者所在的 pane。** 从 A 标签页触发的动作会落在当时焦点所在的 B 标签页。绑键位时这是对的行为，但 e2e 测试不能假设动作作用于测试自己的 pane。
+
 在保住运行中进程（agent！）的前提下，**改变拓扑的唯一手段是把 pane 移到临时 staging tab 再插回来**。`layout.apply` 不行（杀进程），同 tab `pane.move` 不行（被拒），`pane.swap` 不改拓扑。iurysza/herdr-pane-layouts 那套 staging 方案不是绕远路，是唯一解。
 
 **反过来说：只要目标布局和当前布局的形状相同、只差比例，就完全不需要搬动任何东西**，逐个 `layout.set_split_ratio` 即可。这是我们相对现有插件最重要的改进点（§4.3）。
@@ -60,7 +64,11 @@ herdr 开新 pane 必须显式选方向（`prefix+v` / `prefix+minus`），布�
 
 **兼容到 Python 3.9。**macOS 自带 `/usr/bin/python3` 是 3.9.6，加 `from __future__ import annotations` 后 `dict[str, Any]` / `str | None` 这类写法在 3.9 上可用（已在 3.9.6 上实测导入通过）。写代码时避开 `match` 和 3.10+ 的运行时特性。
 
-**传输：默认走 `HERDR_BIN_PATH` 调 CLI。**官方推荐，且跨 Unix socket / Windows 命名管道。只有当某个动作需要连续十几次调用时，才为那条路径引入裸 socket 客户端。**不要一上来就写传输抽象层**——那是为一个还不支持的平台做的抽象。
+**传输：CLI + socket 两条路，按方法是否有 CLI 入口划分。**（2026-09-18 修正，原来写的是「默认 CLI，只有高频才走 socket」，不成立。）
+
+实测 herdr 0.9.1：`layout.export`、`layout.apply`、`layout.set_split_ratio` 在 socket schema 里存在，但**没有任何 CLI 入口**——`herdr layout` 不是命令，`herdr api` 只有 `snapshot` / `schema`，`herdr pane resize` 是相对的 `--direction/--amount`，不是绝对的 `path + ratio`。所以 §4.1 的 preserve_split、§4.2 的 master-width、§4.3 的无损快路径都必须走 socket，这是前置条件而不是性能优化。
+
+`pane.*` 有完整 CLI，继续走 `HERDR_BIN_PATH`。socket 客户端见 `src/herdr.py`，纯标准库 `socket` + `json`，约 30 行，不做传输抽象层。
 
 **Windows 升级路径：**全部动作走 CLI 即可支持，代价是重排类动作变慢。等有人要再说，manifest 里先只写 `["linux", "macos"]`。
 
@@ -130,6 +138,8 @@ else:
 CI 只跑 `python3 -m unittest discover -s test`。
 
 ## 8. 下个会话的待办
+
+已完成（2026-09-18）：smart-split 在真实 session 里跑通（link → invoke，exit 0，方向和 cwd 都正确）；`src/herdr.py` socket 客户端可用，`layout.export` / `layout.set_split_ratio` 都实测过。
 
 1. 实现 `layouts.py` 布局树代数 + `shape_equal` / `ratio_plan`。**从零写，不抄 iurysza/herdr-pane-layouts**——那个仓库没有 LICENSE 文件，而且 `shape_equal` / `ratio_plan` 本来就是新东西，重写成本低于确认授权。需要的函数：`pane` / `split` 构造器、`balanced`、`tiled`、`pane_ids`、`first_pane`、`same`、`shape_equal`、`ratio_plan`、`presets`。
 2. 实现 equalize / cycle 的双路径分派（§4.3）。
