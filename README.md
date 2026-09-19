@@ -23,12 +23,9 @@ herdr server reload-config
 
 ## Keybindings
 
-`prefix+v` 默认绑给内置的 `split_vertical`，先把它挪走：
+直接绑就行 —— `prefix+v` 虽然是内置 `split_vertical` 的默认键，但插件绑定会静默顶掉内置**默认值**，不用先挪开它：
 
 ```toml
-[keys]
-split_vertical = "prefix+shift+v"
-
 [[keys.command]]
 key = "prefix+v"
 type = "plugin_action"
@@ -41,6 +38,8 @@ type = "plugin_action"
 command = "panes.equalize"
 description = "equalize"
 ```
+
+唯一的例外：如果你在 `[keys]` 里**显式**把某个内置动作写成了同一个键（比如 `split_vertical = "prefix+v"`），那内置的赢、插件绑定被禁用，`herdr server reload-config` 会给出诊断 `prefix+v: kept keys.split_vertical, disabled keys.command[N].key`。这种情况把内置那行改掉或删掉即可。要彻底解绑一个内置键，赋空字符串：`split_vertical = ""`。
 
 ## Configuration
 

@@ -50,6 +50,7 @@ herdr 开新 pane 必须显式选方向（`prefix+v` / `prefix+minus`），布�
 
 - 运行时命令的**工作目录是插件目录**，不是用户 pane 的目录。开新 pane 必须显式传 `--cwd`，否则新 pane 落在插件安装目录里。
 - 注入的环境变量：`HERDR_SOCKET_PATH`、`HERDR_BIN_PATH`、`HERDR_ENV=1`、`HERDR_PLUGIN_ID`、`HERDR_PLUGIN_ROOT`、`HERDR_PLUGIN_CONFIG_DIR`、`HERDR_PLUGIN_STATE_DIR`、`HERDR_PLUGIN_CONTEXT_JSON`、`HERDR_PLUGIN_ACTION_ID`，以及可用时的 `HERDR_WORKSPACE_ID` / `HERDR_TAB_ID` / `HERDR_PANE_ID`。
+- `HERDR_CONFIG_PATH` 可以覆盖 herdr 自己的 config.toml 路径（文档 Environment 一节有，`herdr --help` 里没写）。调试键位时用它比改用户的真配置安全，但正在跑的服务端已经读过自己的路径，`reload-config` 不换路径。
 - 用户配置放 `HERDR_PLUGIN_CONFIG_DIR`，运行时状态（含锁文件）放 `HERDR_PLUGIN_STATE_DIR`。**不要**往 `HERDR_PLUGIN_ROOT` 写东西，GitHub 安装的插件根目录是受管 checkout。
 - 动作、pane、link handler 全部在 manifest 里静态声明，v1 没有运行时注册。
 - `min_herdr_version` 决定 herdr 是否放行 link/install，用了哪个方法就诚实抬到那一版。
@@ -145,9 +146,32 @@ else:
 
 ## 6. 键位接管
 
-插件动作通过 `[[keys.command]] type = "plugin_action"` 绑定。要用 `prefix+v` 的话，把内置的 `split_vertical` 挪走（比如 `prefix+shift+v`）再绑插件动作。
+插件动作通过 `[[keys.command]] type = "plugin_action"` 绑定。**不需要先挪开内置键。**（2026-09-19 查证；原来这里写「先把 `split_vertical` 挪走」，是多余的一步。）
 
-> 待验证：`split_vertical = ""` 是否能解绑一个有默认值的内置键。文档里 `""` 用在"默认就没绑"的可选键上（`last_pane`、`next_workspace`），`remote_image_paste` 的注释写了 "empty disables"，但对有默认值的键没实测。改绑一定安全，优先用改绑。
+herdr 0.9.1 的键位解析（`src/config/keybinds.rs`）按 `for source in [User, Default]` 两轮注册，`[[keys.command]]` 在 User 轮注册。冲突处理在 `reject_binding()`：
+
+```rust
+if let Some(first_binding) = registry.conflict(binding) {
+    if source == BindingSource::Default && first_binding.source == BindingSource::User {
+        return true;            // 静默丢掉默认值，不产生诊断
+    }
+    // 其余情况：诊断 "<key>: kept <first_field>, disabled <field>"
+}
+```
+
+由此得到三条规则，都实机核对过：
+
+| 情况 | 结果 |
+|---|---|
+| 内置键保持默认 + 插件绑同一个键 | **插件赢**，内置默认值被静默丢弃，`reload-config` 零诊断 |
+| `[keys]` 里显式把内置动作写成同一个键 + 插件也绑它 | **内置赢**，插件绑定被禁用，诊断 `prefix+v: kept keys.split_vertical, disabled keys.command[2].key` |
+| `split_vertical = ""` | **确实能解绑**有默认值的内置键 |
+
+第三条的机制：TOML 里写了这个键（哪怕值是空串）就会进 `KeysConfig::user_fields`（`src/config/model.rs` 的 `apply_field!` 用 `if let Some(value) = input.$field`），该字段因此是 User 来源；User 轮的 `parse_action_bindings()` 遇到空串 `continue`，产出零个绑定；Default 轮又被 `field_source!` 挡住不再套用默认值。键位于是空了。
+
+原来的推断错在类比：`remote_image_paste` 的注释写了 "empty disables"，但它在 config reference 里的类型是 `string`，而 `split_vertical` / `last_pane` 是 `keybinding`，两者不是一回事。结论对，推理过程不成立。
+
+**验证方式：**herdr 仓库在对应 tag 上是公开的（`raw.githubusercontent.com/herdrdev/herdr/v0.9.1/src/...`），读解析代码比试键位可靠。自动化试不出来：没有查询生效键位的 socket 方法；`pane.send_keys` 走 PTY 不经过键位层（实测发 `ctrl+backslash` 不会触发绑在它上面的插件动作）；`reload-config` 对默认值冲突也不报诊断。人工核对可以按 `prefix+?` 看帮助面板里的生效键位。
 
 ## 7. 测试
 
@@ -167,6 +191,7 @@ CI 只跑 `python3 -m unittest discover -s test`。
 
 - smart-split 在真实 session 里跑通（link → invoke，exit 0，方向和 cwd 都正确）。
 - `src/herdr.py` socket 客户端可用，`layout.export` / `layout.set_split_ratio` 都实测过。
+- §6 的键位问题查清了（见该节）：不需要挪开内置键，插件绑定会顶掉内置默认值；`split_vertical = ""` 确实能解绑。
 - `src/config.py` + 单测 15 个（§4.5）：JSON 配置取代环境变量，实测写文件后不重启服务端即生效（`master_widths` 换成 `[0.25, 0.75]`，动作走的就是新预设）。
 - `src/reshape.py` + `src/cycle.py` + `panes.cycle` 动作（§4.3 §4.4）。真实会话实测：`(right A (down B C))` 连按三次 → columns → rows → columns，pane 顺序和进程都不变，没有 staging 残留，每次约 55ms。注入失败也实测过两种：插回阶段中途失败 → 形状和比例完全还原、staging 关掉；连回滚都失败 → staging 保留（错误消息点名 tab id），原 tab 不被进一步破坏。
 - `src/promote.py` / `src/master_width.py` + 对应动作（§4.2），以及 `smart_split.py` 的 `preserve_split`（§4.1）。`layouts.py` 补了 `parent_split` / `next_in_cycle`。
@@ -175,8 +200,7 @@ CI 只跑 `python3 -m unittest discover -s test`。
   - 原清单里的 `first_pane` / `same` / `presets` 没写。`first_pane` 就是 `pane_ids(root)[0]`，`same` 被 `shape_equal` 覆盖，`presets` 要等 §4.5 的配置格式定下来才有内容。
   - 也没写 `dwindle` 预设：smart-split 本来就按 dwindle 规则长出来，不需要再把它构造成目标树。
 
-1. 验证 §6 的解绑问题。
-2. 决定许可证，打 GitHub topic `herdr-plugin` 上 marketplace。**LICENSE 目前不存在**，而本文档以「iurysza 那个仓库没有 LICENSE」为由拒绝参考其代码，自己没有同样不能上架。
+1. 决定许可证，打 GitHub topic `herdr-plugin` 上 marketplace。**LICENSE 目前不存在**，而本文档以「iurysza 那个仓库没有 LICENSE」为由拒绝参考其代码，自己没有同样不能上架。
 
 ## 9. 参考
 
