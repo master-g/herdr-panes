@@ -14,9 +14,11 @@ run in CI.
 """
 
 import os
+import subprocess
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "src"))
+SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "src")
+sys.path.insert(0, SRC)
 
 import herdr
 import layouts
@@ -185,6 +187,19 @@ def _zoomed(tab):
     assert after["zoomed"], "zoom was not restored"
     assert layouts.pane_ids(after["root"]) == ids, "pane order changed"
     herdr.call("pane.zoom", pane_id=ids[0], mode="off")
+
+
+@check("smart-split hands the focus to the new pane")
+def _smart_split_focus(tab):
+    # runs last: it leaves a fourth pane in the scratch tab, which teardown closes
+    ids = layouts.pane_ids(layout_of(tab)["root"])
+    herdr.call("pane.focus", pane_id=ids[0])
+    subprocess.run([sys.executable, os.path.join(SRC, "smart_split.py")], check=True)
+    after = layout_of(tab)
+    fresh = [p for p in layouts.pane_ids(after["root"]) if p not in ids]
+    assert len(fresh) == 1, "expected exactly one new pane, got %s" % fresh
+    assert after["focused_pane_id"] == fresh[0], \
+        "focus stayed on %s instead of the new pane" % after["focused_pane_id"]
 
 
 def build_scratch_tab():

@@ -10,7 +10,7 @@
 
 | Action | 行为 |
 |---|---|
-| `herdr-panes.smart-split` | 沿焦点 pane 的视觉长边切分 |
+| `herdr-panes.smart-split` | 沿焦点 pane 的视觉长边切分，焦点跟到新 pane |
 | `herdr-panes.promote` | 把焦点 pane 换到 master 位置 |
 | `herdr-panes.master-width` | 让 master pane 在 1/3、1/2、2/3 之间循环 |
 | `herdr-panes.equalize` | 均分各处分割比例，尽量不移动进程 |

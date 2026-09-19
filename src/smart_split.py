@@ -30,7 +30,8 @@ def main():
                                   settings["cell_aspect"])
 
     pane = herdr.call("pane.get", pane_id=focused)["pane"]
-    herdr.call("pane.split", target_pane_id=focused, direction=direction,
+    # focus=true: hyprland hands the new window the focus, pane.split defaults to false
+    herdr.call("pane.split", target_pane_id=focused, direction=direction, focus=True,
                cwd=pane.get("foreground_cwd") or pane["cwd"])
     return 0
 

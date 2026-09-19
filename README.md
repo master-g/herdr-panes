@@ -10,7 +10,7 @@ All five actions work, standard library only, Python 3.9+. Design and implementa
 
 | Action | Behavior |
 |---|---|
-| `herdr-panes.smart-split` | Split the focused pane along its longer visual side |
+| `herdr-panes.smart-split` | Split the focused pane along its longer visual side, focus follows the new pane |
 | `herdr-panes.promote` | Swap the focused pane into the master position |
 | `herdr-panes.master-width` | Cycle the master pane through 1/3, 1/2, 2/3 |
 | `herdr-panes.equalize` | Equalize split ratios without moving processes when possible |
