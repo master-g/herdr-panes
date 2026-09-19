@@ -8,11 +8,11 @@ Dwindle-style splitting, master layout, and lossless pane geometry for [Herdr](h
 
 | Action | Behavior | 状态 |
 |---|---|---|
-| `panes.smart-split` | Split the focused pane along its longer visual side | 骨架可用 |
-| `panes.promote` | Swap the focused pane into the master position | 可用 |
-| `panes.master-width` | Cycle the master pane through 1/3, 1/2, 2/3 | 可用 |
-| `panes.equalize` | Equalize split ratios without moving processes when possible | 可用 |
-| `panes.cycle` | Cycle the tab through layout presets | 可用 |
+| `herdr-panes.smart-split` | Split the focused pane along its longer visual side | 可用 |
+| `herdr-panes.promote` | Swap the focused pane into the master position | 可用 |
+| `herdr-panes.master-width` | Cycle the master pane through 1/3, 1/2, 2/3 | 可用 |
+| `herdr-panes.equalize` | Equalize split ratios without moving processes when possible | 可用 |
+| `herdr-panes.cycle` | Cycle the tab through layout presets | 可用 |
 
 除 `cycle` 需要改变拓扑时会把 pane 移动到临时 tab 再插回来之外，其余动作都只改分割比例或做一次 pane 交换 —— 不重启终端、不打断正在跑的进程。`cycle` 的重排任何一步失败都会把 tab 完整回滚。
 
@@ -31,13 +31,13 @@ herdr server reload-config
 [[keys.command]]
 key = "prefix+v"
 type = "plugin_action"
-command = "panes.smart-split"
+command = "herdr-panes.smart-split"
 description = "smart split"
 
 [[keys.command]]
 key = "prefix+="
 type = "plugin_action"
-command = "panes.equalize"
+command = "herdr-panes.equalize"
 description = "equalize"
 ```
 
@@ -86,6 +86,10 @@ python3 test/e2e_live.py                    # 实机检查，需要 herdr 在跑
 ## License
 
 MIT，见 [LICENSE](LICENSE)。
+
+## Prior art
+
+[iurysza/herdr-pane-layouts](https://github.com/iurysza/herdr-pane-layouts) 先走通了「把 pane 移到临时 tab 再插回来」这条路，证明在不重启进程的前提下改变 tab 拓扑是可行的。本插件独立编写，没有复制它的代码；两者的重叠来自 herdr 的 API 本身 —— 同 tab 的 `pane.move` 会被拒绝，所以中转是唯一解。
 
 ## Credits
 

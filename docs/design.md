@@ -207,4 +207,4 @@ CI 只跑 `python3 -m unittest discover -s test`。
 - 插件授权指南：https://herdr.dev/docs/plugins/
 - Socket API：https://herdr.dev/docs/socket-api/
 - 本机 schema：`herdr api schema --json`
-- 现有同类插件：https://github.com/iurysza/herdr-pane-layouts —— 只作为行为参照（它的 staging 重排方案验证了 §2 的结论），**不复制代码**，仓库无 LICENSE
+- 现有同类插件：https://github.com/iurysza/herdr-pane-layouts —— 它的 staging 重排方案先验证了 §2 的结论，本实现独立编写。该仓库没有 LICENSE（默认保留所有权利），所以连参考代码片段都不行；好在 `shape_equal` / `ratio_plan` / `insert_plan` 本来就是新东西，从零写比确认授权便宜。
