@@ -2,19 +2,21 @@
 
 Dwindle-style splitting, master layout, and lossless pane geometry for [Herdr](https://herdr.dev).
 
-五个动作都可用，纯标准库，Python 3.9+。设计与实现取舍见 [docs/design.md](docs/design.md)。
+[中文说明 / Chinese](README_zh_cn.md)
+
+All five actions work, standard library only, Python 3.9+. Design and implementation trade-offs are in [docs/design.md](docs/design.md).
 
 ## Actions
 
-| Action | Behavior | 状态 |
-|---|---|---|
-| `herdr-panes.smart-split` | Split the focused pane along its longer visual side | 可用 |
-| `herdr-panes.promote` | Swap the focused pane into the master position | 可用 |
-| `herdr-panes.master-width` | Cycle the master pane through 1/3, 1/2, 2/3 | 可用 |
-| `herdr-panes.equalize` | Equalize split ratios without moving processes when possible | 可用 |
-| `herdr-panes.cycle` | Cycle the tab through layout presets | 可用 |
+| Action | Behavior |
+|---|---|
+| `herdr-panes.smart-split` | Split the focused pane along its longer visual side |
+| `herdr-panes.promote` | Swap the focused pane into the master position |
+| `herdr-panes.master-width` | Cycle the master pane through 1/3, 1/2, 2/3 |
+| `herdr-panes.equalize` | Equalize split ratios without moving processes when possible |
+| `herdr-panes.cycle` | Cycle the tab through layout presets |
 
-除 `cycle` 需要改变拓扑时会把 pane 移动到临时 tab 再插回来之外，其余动作都只改分割比例或做一次 pane 交换 —— 不重启终端、不打断正在跑的进程。`cycle` 的重排任何一步失败都会把 tab 完整回滚。
+Except for `cycle`, which moves panes to a scratch tab and back when the topology has to change, every action only adjusts split ratios or performs a single pane swap — no terminal restarts, no interrupted processes. If any step of a `cycle` reshape fails, the whole tab is rolled back.
 
 ## Install
 
@@ -25,7 +27,7 @@ herdr server reload-config
 
 ## Keybindings
 
-直接绑就行 —— `prefix+v` 虽然是内置 `split_vertical` 的默认键，但插件绑定会静默顶掉内置**默认值**，不用先挪开它：
+Just bind them. `prefix+v` is the default key for the built-in `split_vertical`, but a plugin binding silently overrides a built-in **default**, so you don't have to move it out of the way first:
 
 ```toml
 [[keys.command]]
@@ -41,11 +43,11 @@ command = "herdr-panes.equalize"
 description = "equalize"
 ```
 
-唯一的例外：如果你在 `[keys]` 里**显式**把某个内置动作写成了同一个键（比如 `split_vertical = "prefix+v"`），那内置的赢、插件绑定被禁用，`herdr server reload-config` 会给出诊断 `prefix+v: kept keys.split_vertical, disabled keys.command[N].key`。这种情况把内置那行改掉或删掉即可。要彻底解绑一个内置键，赋空字符串：`split_vertical = ""`。
+The one exception: if you **explicitly** assigned the same key to a built-in action under `[keys]` (say `split_vertical = "prefix+v"`), the built-in wins and the plugin binding is disabled. `herdr server reload-config` then reports `prefix+v: kept keys.split_vertical, disabled keys.command[N].key`. Change or delete that built-in line to fix it. To unbind a built-in key entirely, assign an empty string: `split_vertical = ""`.
 
 ## Configuration
 
-可选，放在 `herdr plugin config-dir panes` 打印的目录里，文件名 `config.json`。不存在就用默认值；改完立即生效，不用重启 herdr。
+Optional. Put a `config.json` in the directory printed by `herdr plugin config-dir panes`. Defaults apply when the file is absent; edits take effect immediately, no herdr restart needed.
 
 ```json
 {
@@ -56,26 +58,26 @@ description = "equalize"
 }
 ```
 
-| 键 | 默认 | 作用 |
+| Key | Default | Purpose |
 |---|---|---|
-| `cell_aspect` | `2.0` | 终端 cell 的高宽比，决定 smart-split 判断「视觉长边」的阈值。字体和行距会影响真实比例 |
-| `preserve_split` | `false` | 打开后新切分继承焦点 pane 所在 split 的方向，列保持是列，而不是按长边重算 |
-| `master_widths` | `[0.333, 0.5, 0.667]` | master-width 循环经过的比例 |
-| `cycle` | `["columns", "rows"]` | cycle 经过的布局预设。可选 `columns`（一排列）和 `rows`（一叠行） |
+| `cell_aspect` | `2.0` | Height-to-width ratio of a terminal cell, which sets the threshold smart-split uses to decide the "longer visual side". Font and line spacing affect the real ratio |
+| `preserve_split` | `false` | When on, a new split inherits the direction of the split the focused pane lives in — a column stays a column instead of being recomputed from the longer side |
+| `master_widths` | `[0.333, 0.5, 0.667]` | Ratios master-width cycles through |
+| `cycle` | `["columns", "rows"]` | Layout presets cycle walks through. Available: `columns` (one row of columns) and `rows` (one stack of rows) |
 
-写错的键或坏掉的 JSON 会让动作直接失败并在 `herdr plugin log` 里说明哪个文件、哪一项不对，而不是悄悄忽略。
+An unknown key or broken JSON makes the action fail outright and explains which file and which entry is wrong in `herdr plugin log`, rather than being silently ignored.
 
-用环境变量配置行不通：插件动作由 herdr 服务端拉起，继承的是服务端环境，不是你 shell 的。
+Environment variables don't work for configuration: plugin actions are launched by the herdr server and inherit the server's environment, not your shell's.
 
 ## Test
 
 ```sh
-python3 src/smart_split.py --check          # 纯函数自检
-python3 -m unittest discover -s test        # 单测，CI 只跑这个
-python3 test/e2e_live.py                    # 实机检查，需要 herdr 在跑且插件已 link
+python3 src/smart_split.py --check          # pure-function self-check
+python3 -m unittest discover -s test        # unit tests, the only thing CI runs
+python3 test/e2e_live.py                    # live check, needs herdr running and the plugin linked
 ```
 
-`e2e_live.py` 在自己新建的临时 tab 里跑，不碰你正在看的 tab、不移动焦点，结束后关掉临时 tab 并把焦点还回原处。它包含两次故意注入的失败，用来确认重排出错时会完整回滚。
+`e2e_live.py` runs in a scratch tab it creates itself: it never touches the tab you are looking at, never moves focus, and closes the scratch tab and restores focus when it finishes. It includes two deliberately injected failures to confirm a failed reshape rolls back completely.
 
 ## Requirements
 
@@ -85,13 +87,13 @@ python3 test/e2e_live.py                    # 实机检查，需要 herdr 在跑
 
 ## License
 
-MIT，见 [LICENSE](LICENSE)。
+MIT, see [LICENSE](LICENSE).
 
 ## Prior art
 
-[iurysza/herdr-pane-layouts](https://github.com/iurysza/herdr-pane-layouts) 先走通了「把 pane 移到临时 tab 再插回来」这条路，证明在不重启进程的前提下改变 tab 拓扑是可行的。本插件独立编写，没有复制它的代码；两者的重叠来自 herdr 的 API 本身 —— 同 tab 的 `pane.move` 会被拒绝，所以中转是唯一解。
+[iurysza/herdr-pane-layouts](https://github.com/iurysza/herdr-pane-layouts) first made the "move panes to a scratch tab and back" route work, proving a tab's topology can change without restarting processes. This plugin was written independently and copies none of its code; the overlap comes from herdr's API itself — `pane.move` within the same tab is rejected, so a detour is the only option.
 
 ## Credits
 
 - [masterg](https://github.com/master-g)
-- Claude（Anthropic Claude Code）—— 结对开发：实现、实机验证、测试与文档
+- Claude (Anthropic Claude Code) — pair development: implementation, live verification, tests and docs
