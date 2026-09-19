@@ -2,7 +2,7 @@
 
 Dwindle-style splitting, master layout, and lossless pane geometry for [Herdr](https://herdr.dev).
 
-早期开发中。设计见 [docs/design.md](docs/design.md)。
+五个动作都可用，纯标准库，Python 3.9+。设计与实现取舍见 [docs/design.md](docs/design.md)。
 
 ## Actions
 
@@ -13,6 +13,8 @@ Dwindle-style splitting, master layout, and lossless pane geometry for [Herdr](h
 | `panes.master-width` | Cycle the master pane through 1/3, 1/2, 2/3 | 可用 |
 | `panes.equalize` | Equalize split ratios without moving processes when possible | 可用 |
 | `panes.cycle` | Cycle the tab through layout presets | 可用 |
+
+除 `cycle` 需要改变拓扑时会把 pane 移动到临时 tab 再插回来之外，其余动作都只改分割比例或做一次 pane 交换 —— 不重启终端、不打断正在跑的进程。`cycle` 的重排任何一步失败都会把 tab 完整回滚。
 
 ## Install
 
@@ -84,3 +86,8 @@ python3 test/e2e_live.py                    # 实机检查，需要 herdr 在跑
 ## License
 
 MIT，见 [LICENSE](LICENSE)。
+
+## Credits
+
+- [masterg](https://github.com/master-g)
+- Claude（Anthropic Claude Code）—— 结对开发：实现、实机验证、测试与文档
