@@ -53,7 +53,7 @@ herdr 开新 pane 必须显式选方向（`prefix+v` / `prefix+minus`），布�
 - `HERDR_CONFIG_PATH` 可以覆盖 herdr 自己的 config.toml 路径（文档 Environment 一节有，`herdr --help` 里没写）。调试键位时用它比改用户的真配置安全，但正在跑的服务端已经读过自己的路径，`reload-config` 不换路径。
 - 用户配置放 `HERDR_PLUGIN_CONFIG_DIR`，运行时状态（含锁文件）放 `HERDR_PLUGIN_STATE_DIR`。**不要**往 `HERDR_PLUGIN_ROOT` 写东西，GitHub 安装的插件根目录是受管 checkout。
 - 动作、pane、link handler 全部在 manifest 里静态声明，v1 没有运行时注册。
-- `min_herdr_version` 决定 herdr 是否放行 link/install，用了哪个方法就诚实抬到那一版。
+- `min_herdr_version` 决定 herdr 是否放行 link/install，用了哪个方法就诚实抬到那一版。 核对过（2026-09-19）：本插件用到的每个方法和参数形状在 0.9.0 的 bundled schema（`docs/next/api/herdr-api.schema.json`，仓库里有，按 tag 取）里都存在 —— `layout.set_split_ratio` 的 `path`、`pane.move` 目的地的 `target_pane_id` / `ratio`、`pane.zoom` 的 `mode`、`tab_created` 的 `root_pane`。所以 `0.9.0` 这个声明是诚实的。0.8.0（protocol 19）其实也全有，但没在那上面测过，不往下调。
 
 ### 实测延迟
 
