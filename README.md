@@ -80,3 +80,7 @@ python3 test/e2e_live.py                    # 实机检查，需要 herdr 在跑
 - Herdr 0.9.0+
 - Python 3.9+
 - macOS or Linux
+
+## License
+
+MIT，见 [LICENSE](LICENSE)。

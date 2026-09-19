@@ -200,7 +200,7 @@ CI 只跑 `python3 -m unittest discover -s test`。
   - 原清单里的 `first_pane` / `same` / `presets` 没写。`first_pane` 就是 `pane_ids(root)[0]`，`same` 被 `shape_equal` 覆盖，`presets` 要等 §4.5 的配置格式定下来才有内容。
   - 也没写 `dwindle` 预设：smart-split 本来就按 dwindle 规则长出来，不需要再把它构造成目标树。
 
-1. 决定许可证，打 GitHub topic `herdr-plugin` 上 marketplace。**LICENSE 目前不存在**，而本文档以「iurysza 那个仓库没有 LICENSE」为由拒绝参考其代码，自己没有同样不能上架。
+1. 上 marketplace。许可证已定：MIT（`LICENSE`，2026 masterg）。marketplace 的条件是**公开仓库** + GitHub topic `herdr-plugin` + 默认分支上有能解析出必需元数据的 `herdr-plugin.toml`（可在根目录或子目录），索引每 30 分钟自动刷新。manifest 没有 `license` 字段，所以不用改 manifest。剩下的都是仓库层面的动作：建远端、推上去、打 topic。
 
 ## 9. 参考
 
